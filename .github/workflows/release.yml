@@ -1,0 +1,39 @@
+# Publishes a release (with build attestations) when a version tag is pushed.
+# theme.css is generated in smit4450/book-and-quill (`npm run build:release`) and committed here.
+# Tag must match "version" in manifest.json, e.g. `git tag 1.0.1 && git push origin 1.0.1`.
+name: Release Obsidian theme
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches manifest.json
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          version="$(jq -r .version manifest.json)"
+          [ "$tag" = "$version" ] || { echo "Tag $tag does not match manifest version $version"; exit 1; }
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            manifest.json
+            theme.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag" --title="$tag" --generate-notes manifest.json theme.css
